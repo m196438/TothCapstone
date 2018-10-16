@@ -1,0 +1,175 @@
+%% Crowd Simulation
+% Andy Toth
+% 16 OCT 18
+clear;
+clc;
+
+%% Simulation Parameters
+%
+% Member Setup
+nF = 20; %Set the number of followers
+nL = 10; %Set the number of leaders
+tgt = [2000, 1400]; %Target coordinates that leaders move toward in a straight line.
+lowlimF = -100; %Min initial follower speed.
+uplimF = 100; %Max initial follower speed.
+rn = 75; %Radius of influence around each member (in reference, each member is 20x15 units large)
+
+% Leaders: desired direction set up
+w = 1; %Strength of initial velocity in the leaders' movement.
+z = 1 - w; %Strength of influence of others in the leaders' own movement.
+
+% Frame rate
+T = 0.01; % Used later to refresh the viewing window every 10th of a second.
+TOT = 1; % Total number of trials run.
+BAD = 0; %Toal number of unsuccessful trials.
+GOOD = 0; %Total number of successful trials.
+t = 1; %Iteration number
+% Window Setup
+width=2000; height=1400; %Size of viewing window.
+
+while TOT <= 100 %Run 100 trials total
+    
+    myfig = configureWindow(width,height); %Create the viewing window.
+    
+    
+    
+    %% Generate graphic objects and set initial positions
+    %
+    [Leader, Follower] = CreateMembers(nL, nF); %create leaders/followers on the viewing window
+    
+    sdX = 200; %standard deviation of follower placement from mean in the X
+    sdY = 200; %standard deviation of follower placement from mean in the Y
+    mX = width/2; %mean follower position in the X
+    mY = height/2; %mean follower position in the Y
+    y = sdY.*randn(nF,1) + mY; %create an array of Y positions that has an average and stDev as given
+    x = sdX.*randn(nF,1) + mX; %create an array of X positions that has an average and stDev as given
+    
+    % Set follwer positions.
+    for q = 1:nF %for each follower
+        XposF(q) = x(q); %assign each individual follower an X coordinate
+        YposF(q) = y(q); %assign each individual follower a Y coordinate
+        %XposF(q) = rand()*width/2 + 0.25*width; %can be used for random placement not around a mean
+        %YposF(q) = rand()*height/2 + 0.25*height;
+        moveXto(Follower(q),XposF(q)); %move the follower there on the graph
+        moveYto(Follower(q),YposF(q));
+    end
+    
+    % Set leader positions and velocities.
+    
+    ang = 2*pi/nL; %used to find the angular placement of each member in circular config
+    
+    for q = 1:nL %for each leader
+        
+        %XposL(q) = rand()*width/2 + 0.25*width;        %RANDOM
+        %YposL(q) = rand()*height/2 + 0.25*height;      %RANDOM
+        %ang = 2*pi/nL*q;                               %CIRCLE
+        %XposL(q) = 400*cos(ang) + width/2;             %CIRCLE
+        %YposL(q) = 400*sin(ang) + height/2;            %CIRCLE
+        XposL(q) = width/2/nL*q;                        %LINE BELOW
+        YposL(q) = height/2 - height/2/nL*(q);          %LINE BELOW
+        
+        moveXto(Leader(q), XposL(q));                   %move the leader on the graph
+        moveYto(Leader(q), YposL(q));
+        
+        LeadInitDirX(q) = tgt(1) -  Leader(q).XData(1); %set the initial leader direction toward the target point given at the beginning
+        LeadInitDirY(q) = tgt(2) -  Leader(q).YData(2);
+        
+        mag = sqrt((LeadInitDirX(q))^2 + (LeadInitDirY(q))^2);  %create a unit vector for leader direction
+        LeadInitDirX(q) = LeadInitDirX(q)/mag;
+        LeadInitDirY(q) = LeadInitDirY(q)/mag;
+        
+        V_Lx(q) = 100*LeadInitDirX(q);  %make all leaders move at 100 units/unitTime
+        V_Ly(q) = 100*LeadInitDirY(q);
+    end
+    
+    %% Set follower initial speeds
+    
+    [V_Fx, V_Fy ] = InitFollowVel(lowlimF, uplimF, nF); %Set initial follower X and Y velocities.
+    
+    %% Move members
+    %
+    complete = 0;  % is the iteration done? 0 means no
+    tic;    %begin a timer to see how long the iteration takes
+    while (complete == 0)  % continue updating until finished
+        pause(T);  % this is the way that we force the framerate
+        for i = 1:nF
+            for q = 1:nL
+                Xdif = XposF(i)-XposF(q); %check the distance between two followers
+                Ydif = YposF(i)-YposF(q);
+                posDif(i,q) = sqrt(Xdif^2 + Ydif^2);
+                
+                
+                if posDif(i,q) <= rn %if inside radius of influence, allow velocities of each member to influence each other
+                    %posDif(i,q) = 0;
+                    V_Fx(i) = (V_Fx(i)+V_Fx(q))/2;
+                    V_Fy(i) = (V_Fy(i)+V_Fy(q))/2;
+                end
+            end
+            
+            for q = 1:nL
+                XdifL = XposF(i)- XposL(q); %check the distance between two leaders
+                YdifL = YposF(i) - XposL(q);
+                posDifL(i,q) = sqrt(XdifL^2 + YdifL^2);
+                
+                if posDifL(i,q) <= rn %if inside radius of influence, allow velocities of each member to influence each other
+                    V_Fx(i) = (V_Fx(i)+V_Lx(q))/2;
+                    V_Fy(i) = (V_Fy(i)+V_Ly(q))/2;
+                    V_Lx(q) = z*((V_Fx(i)+V_Lx(q))/2) + (w*V_Lx(q));
+                    V_Ly(q)  = z*((V_Fy(i)+V_Ly(q))/2) + (w*V_Ly(q));
+              
+            
+                end
+                
+                if XposF(i) >= tgt(1)
+                    V_Fx(i) = 0;
+                end
+                
+                if YposF(i) >= tgt(2)
+                    V_Fy(i) = 0;
+                end
+           
+            end
+            
+            XposF(i) = XposF(i) + V_Fx(i)*T;
+            YposF(i) = YposF(i) + V_Fy(i)*T;
+            
+            moveYby(Follower(i),V_Fy(i)*T);  % follower positions updated by speed*time
+            moveXby(Follower(i),V_Fx(i)*T);
+        end
+        
+        for q = 1:nL
+          moveYby(Leader(q),V_Ly(q)*T);  % leader position updated by speed*time
+            moveXby(Leader(q),V_Lx(q)*T);
+            XposL(q) = XposL(q) + V_Lx(q)*T;
+            YposL(q) = YposL(q) + V_Ly(q)*T;   
+        end
+        
+        for i = 1:nF %find the average position of the followers
+            avgX = mean(XposF(i));
+            avgY = mean(YposF(i));
+        end
+        
+        if (abs(tgt(1) - avgX) < 500) %check if the average position is close to the target
+            if (abs(tgt(2) - avgY) < 500)
+                
+                GOOD = GOOD + 1; % if it is close enough, call the iteration a success
+                complete = 1; % start a new iteration
+            end
+        end
+        
+        timeElaps(TOT) = toc; %record how long this iteration took
+        
+        if timeElaps(TOT) > 15; %if the iteration takes too long without becoming GOOD, end it and call it BAD
+            
+            BAD = BAD + 1;
+            complete = 1;
+        end
+        
+        tic; %start the timer new for the next iteration
+        
+    end
+    TOT = BAD + GOOD;
+end
+%% Contributors
+% Written by MIDN 1/C Andrew Toth.
+% Based on code by B. E. Bishop, J. S. Donnal, and J. A. Piepmeier.

@@ -1,0 +1,153 @@
+%% Crowd Simulation
+% Andy Toth
+% 01 OCT 18
+clear;
+clc;
+
+%% Simulation Parameters
+%
+% Member Setup
+nF = 20; %Number of followers
+nL = 8; %Number of leaders
+tgt = [2000, 1400]; %Target coordinates.
+lowlimF = -100; %Min initial follower speed.
+uplimF = 100; %Max initial follower speed.
+rn = 250;
+
+% Leaders: desired direction set up
+Vxo = 0;
+Vyo = 0;
+w = 1; %Strength of initial velocity.
+z = 1 - w;
+
+% Frame rate
+T = 0.01; % 100 hz
+TOT = 0;
+BAD = 0;
+GOOD = 0;
+width=2000; height=1400;
+
+while TOT <= 100
+    
+    
+    
+    
+    %% Generate graphic objects and set initial positions
+    %
+    [Leader, Follower] = CreateMembers(nL, nF); %create members
+    
+    sdX = 200;
+    sdY = 200;
+    mX = width/2;
+    mY = height/2;
+    y = sdY.*randn(nF,1) + mY;
+    x = sdX.*randn(nF,1) + mX;
+    % Set follwer positions.
+    for q = 1:nF
+        XposF(q) = x(q);
+        YposF(q) = y(q);
+        %XposF(q) = rand()*width/2 + 0.25*width;
+        %YposF(q) = rand()*height/2 + 0.25*height;
+    end
+    
+    % Set leader positions and velocities.
+    
+    ang = 2*pi/nL;                                     %CIRCLE
+    for q = 1:nL
+        %XposL(q) = rand()*width/2 + 0.25*width;        %RANDOM
+        %YposL(q) = rand()*height/2 + 0.25*height;      %RANDOM
+        ang = 2*pi/nL*q;
+        XposL(q) = 400*cos(ang) + width/2;
+        YposL(q) = 400*sin(ang) + height/2;
+        LeadInitDirX(q) = tgt(1) -  Leader(q).XData(1);
+        LeadInitDirY(q) = tgt(2) -  Leader(q).YData(2);
+        mag = sqrt((LeadInitDirX(q))^2 + (LeadInitDirY(q))^2);
+        LeadInitDirX(q) = LeadInitDirX(q)/mag;
+        LeadInitDirY(q) = LeadInitDirY(q)/mag;
+        V_Lx(q) = 100*LeadInitDirX(q);
+        V_Ly(q) = 100*LeadInitDirY(q);
+    end
+    
+    
+    
+    %% Set member initial speeds
+    %
+    [V_Fx, V_Fy ] = InitFollowVel(lowlimF, uplimF, nF); %Set initial follower X
+    % and Y velocities.
+    
+    
+    V_LintendX = 100;
+    V_LintendY = 100;
+    %% Move members on screen
+    %
+    complete = 0;  % a flag to determine if the game is over
+    tic;
+    while (complete == 0)  % continue updating until finished
+        for q = 1:nL
+            if Leader(q).XData(1) == (0 || height)
+                V_Lx(q) = -V_Lx(q);
+            end
+            if Leader(q).YData(1) == (0 || height)
+                V_Ly(q) = -V_Ly(q);
+            end
+        end
+        for i = 1:nF
+            if Follower(i).XData(1) == (0 || width)
+                V_Fx(i) = -V_Fx(i);
+            end
+            if Follower(i).YData(1) == (0 || height)
+                V_Fy(q) = -V_Fy(q);
+            end
+        end
+        for i = 1:nF
+            for q = 1:nL
+                Xdif = XposF(i)-XposF(q);
+                Ydif = YposF(i)-YposF(q);
+                posDif(i,q) = sqrt(Xdif^2 + Ydif^2);
+                if posDif(i,q) <= rn
+                    posDif(i,q) = 0;
+                    V_Fx(i) = (V_Fx(i)+V_Fx(q))/2;
+                    V_Fy(i) = (V_Fy(i)+V_Fy(q))/2;
+                end
+            end
+            for q = 1:nL
+                XdifL = XposF(i)- XposL(q);
+                YdifL = YposF(i) - XposL(q);
+                posDifL(i,q) = sqrt(XdifL^2 + YdifL^2);
+                if posDifL(i,q) <= rn
+                    V_Fx(i) = (V_Fx(i)+V_Lx(q))/2;
+                    V_Fy(i) = (V_Fy(i)+V_Ly(q))/2;
+                    V_Lx(q) = z*((V_Fx(i)+V_Lx(q))/2) + (w*V_LintendX);
+                    V_Ly(q) = z*((V_Fy(i)+V_Ly(q))/2) + (w*V_LintendY);
+                end
+            end
+            % For each follower
+            moveYby(Follower(i),V_Fy(i)*T);  % position updated by speed*time
+            moveXby(Follower(i),V_Fx(i)*T);
+        end
+        for q = 1:nL
+            moveYby(Leader(q),V_Ly(q)*T);  % position updated by speed*time
+            moveXby(Leader(q),V_Lx(q)*T);
+        end
+        for i = 1:nF
+            avgX = mean(XposF(i));
+            avgY = mean(YposF(i));
+        end
+        if (abs(tgt(1) - avgX) < 100)
+            if (abs(tgt(2) - avgY) < 100)
+                complete = 1;
+                timeElapsGOOD = toc;
+                GOOD = GOOD + 1;
+            end
+        end
+        timeElaps = toc;
+        if timeElaps > 30;
+            complete = 1;
+            BAD = BAD + 1;
+        end
+    end
+    TOT = BAD + GOOD;
+end
+%% Contributors
+% Written by MIDN 1/C Andrew Toth.
+% Based on code by B. E. Bishop, J. S. Donnal, and J. A. Piepmeier.
